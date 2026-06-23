@@ -1,0 +1,20 @@
+{
+  "name": "doc-tools",
+  "version": "1.1.0",
+  "description": "Sistema de documentação técnica Angular automatizado via Claude Code",
+  "scripts": {
+    "converter": "node convert-specs.js",
+    "gerar": "node generate-doc.js",
+    "painel": "node generate-painel.js"
+  },
+  "dependencies": {
+    "adm-zip":   "^0.5.10",
+    "docx":      "^8.5.0",
+    "mammoth":   "^1.12.0",
+    "pdf-parse": "^1.1.1",
+    "xlsx":      "^0.18.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
