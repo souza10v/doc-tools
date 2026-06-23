@@ -235,54 +235,207 @@ function renderEndpoint(ep, idx) {
 async function gerarPagina(pg) {
   const titulo   = pg.titulo ?? pg.rota ?? "Página";
   const filename = pg.arquivo ?? `${(pg.rota ?? "pagina").replace(/\//g, "-").replace(/^-/, "")}.docx`;
+  const isAtualizado = pg.atualizado ?? false;
 
-  const children = [
-    ...capa(`Documentação — ${titulo}`, `Rota: ${pg.rota ?? "—"}`, data.data),
+  // ── Seção 1: Identificação ──────────────────────────────────────────────────
+  const secIdentificacao = [
     h1("1. Identificação"),
-    ...["Página","Rota","Módulo","Componente principal","Última atualização"].map((k, i) =>
-      body(`${k}: ${[titulo, pg.rota, pg.modulo, pg.componentePrincipal, pg.ultimaAtualizacao ?? data.data][i] ?? "—"}`)
+    mkTable(
+      ["Campo", "Valor"],
+      [2800, CW - 2800],
+      [
+        ["Página",               titulo],
+        ["Rota(s)",              Array.isArray(pg.rotas) ? pg.rotas.join(", ") : pg.rota ?? "—"],
+        ["Módulo Angular",       pg.modulo ?? "—"],
+        ["Componente principal", pg.componentePrincipal ?? "—"],
+        ["Última atualização",   pg.ultimaAtualizacao ?? data.data],
+        ["Status",               isAtualizado ? "🔄 Atualizado nesta execução" : "✅ Documentado"],
+      ]
     ),
     spacer(), divider(),
-
-    h1("2. Descrição Funcional"),
-    body(pg.descricao ?? "Não identificada — preencher manualmente."),
-    ...(pg.fluxo?.length ? [spacer(), h2("Fluxo"), ...pg.fluxo.map(f => bullet(f))] : []),
-    spacer(), divider(),
-
-    h1("3. Componentes"),
-    ...(pg.componentes?.length
-      ? [mkTable(["Componente","Seletor","Função"], [2800,2400,CW-5200], pg.componentes.map(c=>[c.nome,c.seletor,c.descricao])), spacer()]
-      : [body("Nenhum componente mapeado.")]),
-    divider(),
-
-    h1("4. Serviços e Endpoints"),
-    ...(pg.servicos?.length ? pg.servicos.flatMap(s => [
-      h2(s.nome),
-      ...(s.endpoints?.length
-        ? s.endpoints.flatMap((ep, i) => renderEndpoint(ep, i))
-        : [body("Sem endpoints mapeados.")]),
-      spacer(),
-    ]) : [body("Nenhum serviço mapeado.")]),
-    divider(),
-
-    h1("5. Regras de Negócio"),
-    ...(pg.regrasNegocio?.length
-      ? pg.regrasNegocio.map((r, i) => bullet(`RN-${String(i+1).padStart(3,"0")}: ${r}`))
-      : [body("Nenhuma regra identificada.")]),
-    spacer(), divider(),
-
-    h1("6. Guards e Permissões"),
-    ...(pg.guards?.length ? pg.guards.map(g => body(`${g.nome} (${g.tipo}): ${g.descricao}`)) : [body("Sem guards.")]),
-    spacer(), divider(),
-
-    h1("7. Observações Técnicas"),
-    ...(pg.observacoes?.length ? pg.observacoes.map(o => bullet(o)) : [body("Sem observações.")]),
-    ...(pg.pendentes?.length  ? [spacer(), h2("Pendências"),            ...pg.pendentes.map(p  => tag(`⚠️  [Pendente] ${p}`,          AMBER))] : []),
-    ...(pg.descobertos?.length? [spacer(), h2("Descobertos no código"), ...pg.descobertos.map(d => tag(`🔍  [Descoberto no código] ${d}`, NAVY))] : []),
   ];
 
-  await salvar(filename, `Página: ${titulo}`, children);
-  return { rota: pg.rota, arquivo: filename, titulo, atualizado: pg.atualizado ?? false };
+  // ── Seção 2: Descrição Funcional ────────────────────────────────────────────
+  const secDescricao = [
+    h1("2. Descrição Funcional"),
+    body(pg.descricao ?? "Não identificada — preencher manualmente."),
+    ...(pg.fluxo?.length ? [
+      spacer(),
+      h2("Fluxo da tela"),
+      ...pg.fluxo.map((f, i) => new Paragraph({
+        numbering: { reference: "bullets", level: 0 },
+        spacing: { after: 60 },
+        children: [
+          new TextRun({ text: `${i + 1}. `, bold: true, size: 22, font: "Arial", color: BLUE }),
+          new TextRun({ text: f, size: 22, font: "Arial" }),
+        ],
+      })),
+    ] : []),
+    spacer(), divider(),
+  ];
+
+  // ── Seção 3: Componentes (tabela resumo + detalhe de cada um) ───────────────
+  const secComponentes = [h1("3. Componentes Utilizados")];
+  if (pg.componentes?.length) {
+    // Tabela resumo
+    secComponentes.push(mkTable(
+      ["Componente", "Seletor", "Módulo", "Descrição"],
+      [2400, 2000, 1800, CW - 6200],
+      pg.componentes.map(c => [c.nome, c.seletor ?? "—", c.modulo ?? "—", c.descricao ?? "—"])
+    ));
+    secComponentes.push(spacer());
+
+    // Detalhe individual de cada componente
+    pg.componentes.forEach(c => {
+      secComponentes.push(h2(c.nome));
+      secComponentes.push(body(`Seletor: ${c.seletor ?? "—"}`, { color: "666666", size: 20 }));
+      secComponentes.push(body(`Módulo: ${c.modulo ?? "—"}`, { color: "666666", size: 20 }));
+      if (c.descricao) secComponentes.push(body(c.descricao));
+
+      // Inputs
+      if (c.inputs?.length) {
+        secComponentes.push(h3("@Input()"));
+        secComponentes.push(mkTable(
+          ["Propriedade", "Tipo", "Descrição"],
+          [2400, 2000, CW - 4400],
+          c.inputs.map(i => [i.nome, i.tipo ?? "—", i.descricao ?? "—"]),
+          ["", NAVY, ""]
+        ));
+        secComponentes.push(spacer());
+      }
+
+      // Outputs
+      if (c.outputs?.length) {
+        secComponentes.push(h3("@Output()"));
+        secComponentes.push(mkTable(
+          ["Evento", "Tipo", "Descrição"],
+          [2400, 2400, CW - 4800],
+          c.outputs.map(o => [o.nome, o.tipo ?? "—", o.descricao ?? "—"]),
+          ["", NAVY, ""]
+        ));
+        secComponentes.push(spacer());
+      }
+
+      // Métodos públicos
+      if (c.metodos?.length) {
+        secComponentes.push(h3("Métodos públicos"));
+        secComponentes.push(mkTable(
+          ["Método", "Descrição"],
+          [3200, CW - 3200],
+          c.metodos.map(m => [m.nome, m.descricao ?? "—"])
+        ));
+        secComponentes.push(spacer());
+      }
+
+      // Serviços injetados
+      if (c.servicos?.length) {
+        secComponentes.push(body("Serviços injetados:", { bold: true }));
+        c.servicos.forEach(s => secComponentes.push(bullet(s)));
+        secComponentes.push(spacer());
+      }
+    });
+  } else {
+    secComponentes.push(body("Nenhum componente mapeado."));
+  }
+  secComponentes.push(divider());
+
+  // ── Seção 4: Serviços e Endpoints ──────────────────────────────────────────
+  const secServicos = [h1("4. Serviços e Integrações com API")];
+  if (pg.servicos?.length) {
+    pg.servicos.forEach(s => {
+      secServicos.push(h2(s.nome));
+      if (s.escopo) secServicos.push(body(`Escopo: ${s.escopo}`, { color: "666666", size: 20 }));
+      if (s.descricao) secServicos.push(body(s.descricao));
+      secServicos.push(spacer());
+      if (s.endpoints?.length) {
+        s.endpoints.forEach((ep, i) => secServicos.push(...renderEndpoint(ep, i)));
+      } else {
+        secServicos.push(body("Sem endpoints mapeados."));
+      }
+    });
+  } else {
+    secServicos.push(body("Nenhum serviço mapeado."));
+  }
+  secServicos.push(divider());
+
+  // ── Seção 5: Regras de Negócio ──────────────────────────────────────────────
+  const secRegras = [h1("5. Regras de Negócio")];
+  if (pg.regrasNegocio?.length) {
+    pg.regrasNegocio.forEach((r, i) => {
+      secRegras.push(new Paragraph({
+        spacing: { after: 80 },
+        children: [
+          new TextRun({ text: `RN-${String(i + 1).padStart(3, "0")}  `, bold: true, size: 22, font: "Arial", color: BLUE }),
+          new TextRun({ text: r, size: 22, font: "Arial" }),
+        ],
+      }));
+    });
+  } else {
+    secRegras.push(body("Nenhuma regra de negócio identificada."));
+  }
+  secRegras.push(spacer(), divider());
+
+  // ── Seção 6: Guards e Permissões ────────────────────────────────────────────
+  const secGuards = [h1("6. Guards e Permissões")];
+  if (pg.guards?.length) {
+    secGuards.push(mkTable(
+      ["Guard", "Tipo", "Descrição"],
+      [2400, 1800, CW - 4200],
+      pg.guards.map(g => [g.nome, g.tipo, g.descricao ?? "—"])
+    ));
+  } else {
+    secGuards.push(body("Sem guards aplicados nesta rota."));
+  }
+  // Resolvers
+  if (pg.resolvers?.length) {
+    secGuards.push(spacer());
+    secGuards.push(h2("Resolvers"));
+    secGuards.push(mkTable(
+      ["Resolver", "Dado pré-carregado", "Endpoint"],
+      [2400, 2800, CW - 5200],
+      pg.resolvers.map(r => [r.nome, r.dado ?? "—", r.endpoint ?? "—"])
+    ));
+  }
+  secGuards.push(spacer(), divider());
+
+  // ── Seção 7: Observações Técnicas ───────────────────────────────────────────
+  const secObs = [h1("7. Observações Técnicas")];
+  if (pg.observacoes?.length) {
+    pg.observacoes.forEach(o => secObs.push(bullet(o)));
+  } else {
+    secObs.push(body("Sem observações técnicas registradas."));
+  }
+  if (pg.pendentes?.length) {
+    secObs.push(spacer(), h2("⚠️ Pendências"));
+    pg.pendentes.forEach(p => secObs.push(new Paragraph({
+      spacing: { after: 80 },
+      shading: { fill: "FFF3CD", type: ShadingType.CLEAR },
+      children: [new TextRun({ text: `⚠️  ${p}`, size: 22, font: "Arial", color: AMBER, bold: true })],
+    })));
+  }
+  if (pg.descobertos?.length) {
+    secObs.push(spacer(), h2("🔍 Descobertos no código"));
+    pg.descobertos.forEach(d => secObs.push(new Paragraph({
+      spacing: { after: 80 },
+      shading: { fill: "E6F1FB", type: ShadingType.CLEAR },
+      children: [new TextRun({ text: `🔍  ${d}`, size: 22, font: "Arial", color: NAVY, bold: true })],
+    })));
+  }
+
+  // ── Montar documento ────────────────────────────────────────────────────────
+  const children = [
+    ...capa(`Documentação — ${titulo}`, `Rota: ${pg.rota ?? "—"}  ·  Módulo: ${pg.modulo ?? "—"}`, data.data),
+    ...secIdentificacao,
+    ...secDescricao,
+    ...secComponentes,
+    ...secServicos,
+    ...secRegras,
+    ...secGuards,
+    ...secObs,
+  ];
+
+  await salvar(filename, `${titulo} — ${pg.rota ?? ""}`, children);
+  return { rota: pg.rota, arquivo: filename, titulo, atualizado: isAtualizado };
 }
 
 // ── _endpoints.docx ───────────────────────────────────────────────────────────
