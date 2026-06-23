@@ -410,6 +410,78 @@ Response 400:
 
 ## ▶️ Como usar
 
+### Comandos disponíveis
+
+| Comando | O que faz |
+|---------|-----------|
+| `/gerar-doc` | Documentação completa — lê specs, código, formulários, permissões, rastreabilidade |
+| `/gerar-doc --fast` | Modo rápido — gera só rotas, componentes, serviços e endpoints básicos |
+| `/gerar-doc src/app/modulo` | Documenta apenas um módulo específico |
+
+---
+
+### `/gerar-doc` — Modo completo
+
+O modo padrão. Processa tudo:
+
+- ✅ Lê specs (Excel, Word, PowerPoint, PDF) e identifica a qual tela cada uma pertence
+- ✅ Lê apenas os arquivos de código necessários para cada tela (não lê o `src/app` inteiro)
+- ✅ Documenta formulários Angular com campos, tipos e validações (`FormGroup`, `Validators`)
+- ✅ Rastreia endpoints mesmo quando passam por wrappers (`ApiService`, `Gateway`)
+- ✅ Mapeia permissões, roles, claims e guards de cada rota
+- ✅ Registra a fonte de cada informação (qual arquivo de spec, qual linha do código)
+- ✅ Pula páginas sem mudanças usando controle de hash
+- ✅ Gera fluxo de navegação com origem de cada transição no código
+
+```
+# No chat do Claude Code:
+/gerar-doc
+```
+
+---
+
+### `/gerar-doc --fast` — Modo rápido ⚡
+
+Gera documentação básica em menos tempo e com menos tokens. Ideal para:
+- Primeira passagem em projetos grandes
+- Quando você quer só um esqueleto rápido
+- Projetos com centenas de componentes
+
+O que é gerado no modo `--fast`:
+- ✅ Rotas e componentes de cada tela
+- ✅ Serviços e endpoints (básico, sem rastreamento de wrappers)
+- ✅ Regras de negócio das specs
+- ✅ Guards e permissões
+- ❌ Formulários e validações (pulado)
+- ❌ Rastreabilidade detalhada (pulado)
+- ❌ State management, interceptors, storage (pulado)
+
+```
+# No chat do Claude Code:
+/gerar-doc --fast
+```
+
+---
+
+### `/gerar-doc src/app/modulo` — Módulo específico
+
+Documenta apenas um módulo ou pasta. Útil em projetos grandes onde você quer
+documentar por etapas ou atualizar apenas o que mudou em um módulo específico.
+
+```
+# Exemplos:
+/gerar-doc src/app/cotacao
+/gerar-doc src/app/auth
+/gerar-doc src/app/shared
+```
+
+Pode combinar com `--fast`:
+```
+/gerar-doc src/app/cotacao --fast
+```
+
+---
+
 ### Uso diário
 
 ```powershell
@@ -417,15 +489,16 @@ Response 400:
 cd "D:\Projetos\MeuProjeto\doc-tools"
 claude
 
-# 2. No chat do Claude Code, digitar:
-/gerar-doc
+# 2. No chat do Claude Code, escolha o comando:
+/gerar-doc           # completo
+/gerar-doc --fast    # rápido
 ```
 
 ### Primeira vez (projeto novo)
 
 ```powershell
 # 1. Instalar dependências
-npm install docx mammoth
+npm install
 
 # 2. Editar config.json com o caminho do projeto
 
@@ -436,12 +509,6 @@ claude
 
 # 5. Gerar a documentação
 /gerar-doc
-```
-
-### Documentar apenas um módulo
-
-```
-/gerar-doc src/app/cotacao
 ```
 
 ---
@@ -480,12 +547,47 @@ O painel tem **3 abas**:
 
 O sistema controla automaticamente o que já foi documentado:
 
-| Status         | Cor      | O que o Claude faz           |
-|----------------|----------|------------------------------|
-| Documentada    | 🟢 Verde | Pula — não reprocessa        |
-| Parcial        | 🟡 Âmbar | Lê o arquivo e complementa   |
-| Não iniciada   | 🔵 Azul  | Cria do zero                 |
-| Pendente       | 🔴 Vermelho | Avisa — aguarda spec ou código |
+| Status | Cor | O que o Claude faz |
+|--------|-----|-------------------|
+| Documentada | 🟢 Verde | Pula — não reprocessa |
+| Parcial | 🟡 Âmbar | Lê o arquivo e complementa |
+| Não iniciada | 🔵 Azul | Cria do zero |
+| Pendente | 🔴 Vermelho | Avisa — aguarda spec ou código |
+
+---
+
+## ⚡ Controle de hash — evita reprocessamento
+
+O sistema calcula o hash MD5 de cada arquivo de spec e do código Angular.
+Na próxima execução, compara com os hashes salvos:
+
+- **Hash não mudou** → página pulada automaticamente. Zero tokens gastos.
+- **Hash mudou** → página reprocessada como **parcial** (complementa o existente)
+- **Arquivo novo** → página criada do zero
+
+Os hashes ficam em `doc-output/_hashes-specs.json` — não edite manualmente.
+
+```
+📊 Análise de mudanças (exibido no início de cada execução):
+  ⏭️  3 páginas sem mudanças — pulando
+  🔄  2 páginas com mudanças — atualizando
+  ✨  1 página nova — criando
+```
+
+---
+
+## 🔍 Rastreabilidade spec → código
+
+Cada informação documentada registra sua origem:
+
+- **Regras de negócio** mostram o arquivo de spec e linha de origem
+  - `↳ Fonte: cotacao-inicio.xlsx — aba Regras, linha 3`
+- **Fluxo de navegação** mostra onde cada transição foi encontrada no código
+  - `Fonte: CotacaoInicioComponent.ts — método onSubmit()`
+- **Seção de rastreabilidade** no final de cada `.docx` lista:
+  - Quais arquivos de spec foram usados
+  - Quais arquivos de código foram analisados
+  - Tabela com a origem de cada regra de negócio
 
 ---
 

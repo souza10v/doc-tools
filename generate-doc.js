@@ -362,41 +362,102 @@ async function gerarPagina(pg) {
   const secRegras = [h1("5. Regras de Negócio")];
   if (pg.regrasNegocio?.length) {
     pg.regrasNegocio.forEach((r, i) => {
+      const texto = typeof r === "string" ? r : (r.texto ?? r);
+      const fonte = typeof r === "object" ? r.fonte : null;
       secRegras.push(new Paragraph({
-        spacing: { after: 80 },
+        spacing: { after: 60 },
         children: [
           new TextRun({ text: `RN-${String(i + 1).padStart(3, "0")}  `, bold: true, size: 22, font: "Arial", color: BLUE }),
-          new TextRun({ text: r, size: 22, font: "Arial" }),
+          new TextRun({ text: texto, size: 22, font: "Arial" }),
         ],
       }));
+      if (fonte) {
+        secRegras.push(body(`↳ Fonte: ${fonte}`, { color: "888888", size: 18, italics: true }));
+      }
     });
   } else {
     secRegras.push(body("Nenhuma regra de negócio identificada."));
   }
   secRegras.push(spacer(), divider());
 
-  // ── Seção 6: Guards e Permissões ────────────────────────────────────────────
-  const secGuards = [h1("6. Guards e Permissões")];
+  // ── Seção 6: Formulários Angular ───────────────────────────────────────────
+  const secFormularios = [];
+  if (pg.formularios?.length) {
+    secFormularios.push(h1("6. Formulários"));
+    secFormularios.push(body("Campos, validações e obrigatoriedade extraídos do FormGroup/FormBuilder do componente."));
+    secFormularios.push(spacer());
+    pg.formularios.forEach(form => {
+      if (pg.formularios.length > 1) secFormularios.push(h2(`FormGroup: ${form.nome}`));
+      if (form.campos?.length) {
+        const w = [2000, 1200, 900, 2000, CW - 6100];
+        secFormularios.push(mkTable(
+          ["Campo", "Tipo", "Obrigatório", "Validações", "Descrição"],
+          w,
+          form.campos.map(c => [
+            c.campo,
+            c.tipo ?? "—",
+            c.obrigatorio ? "✓ Sim" : "Não",
+            Array.isArray(c.validacoes) ? c.validacoes.join(", ") : c.validacoes ?? "—",
+            c.descricao ?? "—",
+          ])
+        ));
+        // Fonte
+        const fonte = form.campos[0]?.fonte;
+        if (fonte) secFormularios.push(body(`Fonte: ${fonte}`, { color: "888888", size: 18, italics: true }));
+      }
+      secFormularios.push(spacer());
+    });
+    secFormularios.push(divider());
+  }
+
+  // ── Seção 7: Guards, Permissões e Resolvers ─────────────────────────────────
+  const secGuards = [h1(`${pg.formularios?.length ? "7" : "6"}. Guards, Permissões e Resolvers`)];
+
+  // Permissões
+  if (pg.permissoes) {
+    const perm = pg.permissoes;
+    secGuards.push(h2("Controle de acesso"));
+    if (perm.descricao) secGuards.push(body(perm.descricao));
+    secGuards.push(spacer());
+    if (perm.guards?.length || perm.roles?.length || perm.claims?.length) {
+      const w = [2000, CW - 2000];
+      secGuards.push(mkTable(
+        ["Tipo", "Valores"],
+        w,
+        [
+          perm.guards?.length  ? ["Guards",      perm.guards.join(", ")]  : null,
+          perm.roles?.length   ? ["Roles",       perm.roles.join(", ")]   : null,
+          perm.claims?.length  ? ["Claims",      perm.claims.join(", ")]  : null,
+        ].filter(Boolean)
+      ));
+      secGuards.push(spacer());
+    }
+  }
+
+  // Guards individuais
   if (pg.guards?.length) {
+    secGuards.push(h2("Guards de rota"));
     secGuards.push(mkTable(
       ["Guard", "Tipo", "Descrição"],
       [2400, 1800, CW - 4200],
       pg.guards.map(g => [g.nome, g.tipo, g.descricao ?? "—"])
     ));
-  } else {
+    secGuards.push(spacer());
+  } else if (!pg.permissoes) {
     secGuards.push(body("Sem guards aplicados nesta rota."));
   }
+
   // Resolvers
   if (pg.resolvers?.length) {
-    secGuards.push(spacer());
     secGuards.push(h2("Resolvers"));
     secGuards.push(mkTable(
       ["Resolver", "Dado pré-carregado", "Endpoint"],
       [2400, 2800, CW - 5200],
       pg.resolvers.map(r => [r.nome, r.dado ?? "—", r.endpoint ?? "—"])
     ));
+    secGuards.push(spacer());
   }
-  secGuards.push(spacer(), divider());
+  secGuards.push(divider());
 
   // ── Seção 7: Observações Técnicas ───────────────────────────────────────────
   const secObs = [h1("7. Observações Técnicas")];
@@ -422,6 +483,47 @@ async function gerarPagina(pg) {
     })));
   }
 
+  // ── Seção de Rastreabilidade ────────────────────────────────────────────────
+  const secRastreabilidade = [];
+  const rastro = pg.rastreabilidade;
+  if (rastro?.specsUsadas?.length || rastro?.arquivosCodigo?.length) {
+    const numSec = (pg.formularios?.length ? 8 : 7) + 1;
+    secRastreabilidade.push(h1(`${numSec}. Rastreabilidade`));
+    secRastreabilidade.push(body("Origem de cada informação documentada nesta página."));
+    secRastreabilidade.push(spacer());
+
+    if (rastro.specsUsadas?.length) {
+      secRastreabilidade.push(h2("Arquivos de especificação usados"));
+      rastro.specsUsadas.forEach(s => secRastreabilidade.push(bullet(s)));
+      secRastreabilidade.push(spacer());
+    }
+    if (rastro.arquivosCodigo?.length) {
+      secRastreabilidade.push(h2("Arquivos de código analisados"));
+      rastro.arquivosCodigo.forEach(a => secRastreabilidade.push(
+        new Paragraph({
+          spacing: { after: 60 },
+          children: [new TextRun({ text: a, size: 20, font: "Courier New", color: DARK })],
+        })
+      ));
+      secRastreabilidade.push(spacer());
+    }
+
+    // Tabela de regras com fonte
+    if (pg.regrasNegocio?.some(r => r.fonte)) {
+      secRastreabilidade.push(h2("Origem das regras de negócio"));
+      const w = [4000, CW - 4000];
+      secRastreabilidade.push(mkTable(
+        ["Regra", "Fonte"],
+        w,
+        pg.regrasNegocio.map((r, i) => [
+          `RN-${String(i+1).padStart(3,"0")}: ${typeof r === "string" ? r : r.texto}`,
+          typeof r === "object" ? (r.fonte ?? "—") : "—"
+        ])
+      ));
+      secRastreabilidade.push(spacer());
+    }
+  }
+
   // ── Montar documento ────────────────────────────────────────────────────────
   const children = [
     ...capa(`Documentação — ${titulo}`, `Rota: ${pg.rota ?? "—"}  ·  Módulo: ${pg.modulo ?? "—"}`, data.data),
@@ -429,9 +531,11 @@ async function gerarPagina(pg) {
     ...secDescricao,
     ...secComponentes,
     ...secServicos,
+    ...secFormularios,
     ...secRegras,
     ...secGuards,
     ...secObs,
+    ...secRastreabilidade,
   ];
 
   await salvar(filename, `${titulo} — ${pg.rota ?? ""}`, children);

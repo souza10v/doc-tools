@@ -8,252 +8,358 @@ Leia `config.json` para obter:
 
 ---
 
-## Como funciona
+## Modo de execução
 
-Você recebe arquivos de especificação (Word, Excel, PowerPoint, PDF) e código Angular.
-Sua tarefa é **entender o que cada arquivo descreve, cruzar com o código, e gerar um documento por página do frontend**.
+### Modo completo (padrão)
+```
+/gerar-doc
+```
 
-O resultado final é:
-- Um `.docx` por página (`cotacao-inicio.docx`, `login.docx`, etc.)
-- Documentos globais (`_regras-negocio.docx`, `_endpoints.docx`, etc.)
-- Um painel visual (`painel.html`)
+### Modo rápido
+```
+/gerar-doc --fast
+```
+No modo `--fast`, gere apenas: rotas, componentes, serviços e endpoints básicos.
+Pule: análise de formulários, rastreamento de wrappers, state management, storage, interceptors, enums, diretivas.
+Informe no início: `⚡ Modo rápido ativo — análises profundas desativadas`
+
+### Módulo específico
+```
+/gerar-doc src/app/cotacao
+```
+Processa apenas os arquivos dentro do caminho informado.
 
 ---
 
-## Quando receber /gerar-doc
-
-### ETAPA 0 — Ler o controle
+## ETAPA 0 — Ler controle e verificar hashes
 
 Leia `doc-output/_controle.json` se existir.
 
-- **completo** → PULAR completamente
+### 0a. Status de páginas
+- **completo** + hash não mudou → PULAR completamente. Zero tokens.
+- **completo** + hash mudou → processar como **parcial**
 - **parcial** → ler arquivo existente e complementar
 - **pendente** → registrar e avisar
 - **novo** → criar do zero
 
+### 0b. Como verificar hashes
+O `_controle.json` contém `hashesSpecs` e `hashesCode` da execução anterior.
+Para cada arquivo de spec em `specs/` e `endpoints/`, calcule o hash do conteúdo.
+Para cada componente já documentado, verifique se os arquivos `.ts` e `.html` mudaram.
+
+Se o hash do arquivo de spec E o hash do código da página não mudaram → a página está **completo** e pode ser pulada.
+Se qualquer um mudou → reprocessar como **parcial**.
+
+Ao final, salve os novos hashes em `_controle.json`.
+
+### 0c. Relatório de hashes no início
+Antes de processar, informe:
+```
+📊 Análise de mudanças:
+  ⏭️  X páginas sem mudanças — pulando
+  🔄  Y páginas com mudanças — atualizando
+  ✨  Z páginas novas — criando
+```
+
 ---
 
-### ETAPA 1 — Converter os arquivos de entrada
+## ETAPA 1 — Converter arquivos de entrada
 
 ```
 node convert-specs.js
 ```
 
-Isso converte todos os arquivos de `specs/` e `endpoints/` para `.txt` nas pastas `specs-txt/` e `endpoints-txt/`.
+Converte `specs/` e `endpoints/` para texto em `specs-txt/` e `endpoints-txt/`.
 
 Formatos suportados: `.docx`, `.xlsx`, `.pptx`, `.pdf`, `.json`, `.txt`, `.md`
 
 ---
 
-### ETAPA 2 — Ler e interpretar as specs
+## ETAPA 2 — Ler e interpretar as specs
 
-Leia cada arquivo em `specs-txt/` e faça o seguinte:
+Leia cada arquivo em `specs-txt/` e `endpoints-txt/`.
 
-#### 2a. Identificar a qual página cada arquivo pertence
+### 2a. Identificar a qual página cada arquivo pertence
 
-Procure no conteúdo do arquivo por:
-- Nome de tela, funcionalidade ou módulo mencionado
-- Rotas Angular escritas no texto (`/cotacao/inicio`, `cotacao-inicio`, `tela de cotação`)
-- Títulos de seção, abas de planilha ou slides que indiquem o nome da tela
+Procure no conteúdo por:
+- Nome de tela ou funcionalidade mencionada
+- Rotas Angular (`/cotacao/inicio`, `cotacao-inicio`, `tela de cotação`)
+- Títulos, abas de planilha ou slides que indiquem o nome da tela
 
-**Se o arquivo trata de uma tela específica** → associe ao documento daquela página.
-**Se o arquivo trata de múltiplas telas** → distribua cada seção/aba/slide para a página correspondente.
-**Se não conseguir identificar a tela** → coloque em `_pendencias` para revisar manualmente.
+**Arquivo trata de uma tela** → associe à página correspondente
+**Arquivo trata de múltiplas telas** → distribua cada seção para a página correspondente
+**Não identificou** → coloque em pendências
 
-#### 2b. Extrair por categoria — independente do formato
+### 2b. Extrair por categoria
 
-Não importa se é Excel, Word, PDF ou PowerPoint. O que importa é o **conteúdo**. Extraia:
-
-**Regras de negócio** — qualquer frase que descreva uma restrição, validação, condição ou comportamento obrigatório. Exemplos que indicam regra de negócio:
+**Regras de negócio** — frases com restrição, validação ou condição:
 - "deve", "não pode", "é obrigatório", "somente se", "mínimo", "máximo"
-- Células de planilha com coluna "Regra" ou "Validação"
+- Colunas "Regra", "Validação", "Critério" em planilhas
 - Slides com título "Regras" ou "Critérios"
-- Textos como "RN-001:", "Regra 1:", "Validação:"
 
-**Fluxo da tela** — sequência de passos que o usuário segue. Exemplos:
+**Fluxo da tela** — sequência de passos do usuário:
 - Listas numeradas em Word ou PowerPoint
-- Coluna "Passo" ou "Etapa" em planilha
-- Setas e sequências em slides
-- Textos como "primeiro o usuário faz X, depois Y"
+- Colunas "Passo" ou "Etapa" em planilha
+- Textos como "primeiro X, depois Y"
 
-**Endpoints e integrações** — qualquer menção a API, serviço, endpoint, requisição. Exemplos:
+**Endpoints** — menções a API, serviço, requisição:
 - URLs como `/api/cotacao/iniciar`
 - Métodos HTTP: GET, POST, PUT, PATCH, DELETE
-- Colunas "Endpoint", "Serviço", "API" em planilhas
-- Campos de request e response descritos
+- Campos de request e response
 
-**Campos e entidades** — dados que a tela manipula. Exemplos:
-- Tabelas com colunas "Campo", "Tipo", "Obrigatório"
+**Campos e formulários** — dados que a tela manipula:
+- Tabelas com "Campo", "Tipo", "Obrigatório"
 - Listas de campos de formulário
-- Descrições de modelos de dados
 
-**Componentes e UI** — elementos visuais descritos. Exemplos:
-- "botão", "dropdown", "modal", "tabela", "formulário"
-- Wireframes descritos em texto
-- Capturas de tela com legenda
-
-**Glossário** — termos de negócio específicos do domínio.
+**Rastreabilidade** — para cada informação extraída, registre a fonte:
+- `{ fonte: "cotacao-inicio.xlsx", aba: "Regras", linha: "3" }`
+- `{ fonte: "especificacao.docx", secao: "Regras de Negócio" }`
 
 ---
 
-### ETAPA 3 — Ler o código Angular
+## ETAPA 3 — Leitura inteligente do código Angular
 
-Use o caminho do `config.json`. Leia apenas o necessário para as páginas que serão criadas ou atualizadas.
+**NÃO leia todo o `src/app` de uma vez.**
 
-#### Arquivos a ler
+Siga este fluxo para cada página a documentar:
 
+### 3a. Começar pelas rotas
 ```
-src/app/app-routing.module.ts          ← rotas e lazy loading
-src/app/**/*-routing.module.ts         ← rotas de cada módulo
-src/app/**/*.module.ts                 ← declarações e imports
-src/app/**/*.component.ts              ← lógica dos componentes
-src/app/**/*.component.html            ← templates e UI
-src/app/**/*.service.ts                ← serviços e chamadas HTTP
-src/app/**/*.guard.ts                  ← guards de rota
-src/app/**/*.resolver.ts               ← resolvers
-src/app/**/*.interceptor.ts            ← interceptors HTTP
-src/app/**/*.pipe.ts                   ← pipes customizados
-src/app/**/*.directive.ts              ← diretivas customizadas
-src/app/**/*.model.ts                  ← modelos de dados
-src/app/**/*.interface.ts              ← interfaces TypeScript
-src/app/**/*.enum.ts                   ← enums
-src/environments/environment*.ts       ← variáveis de ambiente
+src/app/app-routing.module.ts
+src/app/**/*-routing.module.ts
+```
+Monte um mapa: `rota → componente → módulo`
+
+### 3b. Para cada página, ler apenas os arquivos necessários
+
+1. Identifique o componente da rota no mapa de rotas
+2. Leia apenas o `.component.ts` e `.component.html` desse componente
+3. Nos imports do componente, identifique os serviços injetados
+4. Leia apenas os `.service.ts` desses serviços específicos
+5. No routing, identifique guards e resolvers da rota
+6. Leia apenas os `.guard.ts` e `.resolver.ts` específicos
+7. Identifique componentes filho usados no template (`<app-nome>`)
+8. Leia apenas os `.component.ts` dos filhos diretos
+
+**Não leia arquivos que não sejam necessários para a página sendo documentada.**
+
+### 3c. Rastreamento de wrappers HTTP
+
+Quando um serviço usa wrapper em vez de `HttpClient` diretamente:
+
+```typescript
+// Padrões a rastrear:
+this.apiService.get('/endpoint')
+this.gateway.post('/endpoint', body)
+this.baseService.request('GET', '/endpoint')
+this.http.get('/endpoint')  // direto — fácil
 ```
 
-#### O que extrair de cada tipo de arquivo
+Siga a cadeia de chamadas:
+1. `CotacaoService.iniciar()` chama `ApiService.post('/cotacao')`
+2. Leia `ApiService` para ver que chama `this.http.post(this.baseUrl + path)`
+3. Leia `environment.ts` para obter o valor de `baseUrl`
+4. Documente como `POST ${baseUrl}/cotacao`
 
-**`*.component.ts`**:
-- `@Input()` e `@Output()` declarados
-- Serviços injetados no construtor
-- Métodos públicos relevantes
-- Chamadas a `router.navigate()` (fluxo de navegação)
+Se não conseguir resolver o wrapper completamente, documente como: `POST [baseUrl]/cotacao — resolver baseUrl em environment.ts`
 
-**`*.component.html`**:
-- `[routerLink]` (links entre telas)
-- Componentes filho usados (`<app-nome>`)
-- Formulários e campos de input
+### 3d. Documentação de formulários Angular
 
-**`*.service.ts`**:
-- `this.http.get/post/put/patch/delete(...)` → extrair método, URL e tipo de retorno
-- URLs usando `environment.apiUrl` → montar URL completa
-- `BehaviorSubject`, `signal()` → estado compartilhado
+Para cada `FormGroup` ou `FormBuilder` encontrado nos componentes:
 
-**`*-routing.module.ts`**:
-- `path`, `component`, `canActivate`, `resolve`, `loadChildren`
-- `redirectTo`
+```typescript
+// Identificar:
+this.form = this.fb.group({
+  cnpj:     ['', [Validators.required, Validators.minLength(14)]],
+  numVidas: [null, [Validators.required, Validators.min(3), Validators.max(999)]],
+  vigencia: ['']
+})
+```
 
-**`*.guard.ts`**:
-- Lógica de `canActivate()` — o que verifica e para onde redireciona
+Extraia para cada campo:
+- **Nome** — chave do FormGroup
+- **Valor inicial** — segundo parâmetro
+- **Obrigatório** — se tem `Validators.required`
+- **Validações** — todos os validators aplicados, com parâmetros
+  - `Validators.minLength(14)` → "mínimo 14 caracteres"
+  - `Validators.min(3)` → "valor mínimo: 3"
+  - `Validators.max(999)` → "valor máximo: 999"
+  - `Validators.email` → "formato e-mail"
+  - `Validators.pattern(...)` → "padrão: [regex]"
+  - Validators customizados → nome da função + "validação customizada"
 
-#### Regra de combinação
+Adicione ao JSON da página a chave `formularios`:
+```json
+"formularios": [
+  {
+    "nome": "form",
+    "campos": [
+      {
+        "campo": "cnpj",
+        "tipo": "string",
+        "obrigatorio": true,
+        "validacoes": ["mínimo 14 caracteres"],
+        "descricao": "CNPJ da empresa",
+        "fonte": "CotacaoInicioComponent.ts"
+      },
+      {
+        "campo": "numVidas",
+        "tipo": "number",
+        "obrigatorio": true,
+        "validacoes": ["valor mínimo: 3", "valor máximo: 999"],
+        "descricao": "Número de vidas",
+        "fonte": "CotacaoInicioComponent.ts"
+      }
+    ]
+  }
+]
+```
 
-| Fonte | Prioridade | Tag no documento |
-|-------|-----------|-----------------|
-| Arquivo de spec | Alta | *(sem tag — é a fonte oficial)* |
-| Código Angular | Complementar | `[Descoberto no código]` |
-| Inferência pelo nome | Baixa | `[Inferido — verificar manualmente]` |
+### 3e. Mapeamento completo de navegação
+
+Para cada página, mapeie TODAS as saídas de navegação:
+
+**`[routerLink]` no template:**
+```html
+<a [routerLink]="['/cotacao/planos']">Avançar</a>
+<!-- → link: /cotacao/inicio → /cotacao/planos, condição: "Botão Avançar" -->
+```
+
+**`router.navigate()` no componente:**
+```typescript
+this.router.navigate(['/dashboard'])
+// → action: /cotacao/inicio → /dashboard
+// Verificar em qual método está para inferir a condição
+```
+
+**`redirectTo` no router:**
+```typescript
+{ path: '', redirectTo: '/login', pathMatch: 'full' }
+// → redirect: / → /login, condição: "Redirect automático da raiz"
+```
+
+**Guards:**
+```typescript
+canActivate() {
+  if (!this.auth.isLoggedIn()) {
+    this.router.navigate(['/login'])
+    return false
+  }
+}
+// → guard: qualquer rota protegida → /login, condição: "Não autenticado"
+```
+
+### 3f. Permissões e acessos
+
+Para cada rota, documente:
+
+**Guards padrão Angular:**
+- `canActivate`, `canLoad`, `canActivateChild`
+- Qual guard, o que verifica, para onde redireciona
+
+**Decorators de roles/permissões** (se o projeto usar):
+```typescript
+@Roles('admin', 'manager')
+@Claims('cotacao:criar')
+@Permission('COTACAO_WRITE')
+```
+Se encontrar decorators customizados de permissão, documente o nome e os valores.
+
+**Dados do token/sessão usados:**
+```typescript
+this.auth.hasRole('corretor')
+this.auth.can('cotacao:iniciar')
+```
+
+Adicione ao JSON da página:
+```json
+"permissoes": {
+  "guards": ["AuthGuard", "CorretorGuard"],
+  "roles": ["corretor", "admin"],
+  "claims": ["cotacao:criar"],
+  "descricao": "Apenas corretores autenticados com permissão de criar cotação"
+}
+```
 
 ---
 
-### ETAPA 4 — Montar o JSON por página
+## ETAPA 4 — Montar o JSON com rastreabilidade
 
-Para cada página identificada, monte o objeto e salve tudo em `doc-output/_doc-data.json`:
+Salve em `doc-output/_doc-data.json`.
+
+Para cada informação documentada, inclua a origem:
 
 ```json
 {
   "projeto": "[do config.json]",
   "data": "[dd/mm/yyyy]",
+  "modoRapido": false,
   "paginas": [
     {
-      "titulo": "Nome legível da página",
-      "rota": "/caminho/da/rota",
-      "arquivo": "nome-da-rota.docx",
+      "titulo": "Nome da página",
+      "rota": "/caminho",
+      "arquivo": "nome-rota.docx",
       "modulo": "NomeModule",
       "componentePrincipal": "NomeComponent",
       "status": "novo",
       "atualizado": false,
       "ultimaAtualizacao": null,
-      "descricao": "O que o usuário faz nesta tela — da spec",
-      "fluxo": [
-        "Passo 1 — extraído da spec ou do código",
-        "Passo 2",
-        "Passo 3"
-      ],
-      "componentes": [
+      "hashSpecs": "md5-dos-arquivos-de-spec",
+      "hashCode": "md5-dos-arquivos-de-codigo",
+      "rastreabilidade": {
+        "specsUsadas": ["cotacao-inicio.xlsx", "especificacao.docx"],
+        "arquivosCodigo": [
+          "src/app/cotacao/cotacao-inicio/cotacao-inicio.component.ts",
+          "src/app/cotacao/cotacao.service.ts"
+        ]
+      },
+      "descricao": "...",
+      "descricaoFonte": "cotacao-inicio.xlsx — aba Descrição",
+      "fluxo": ["Passo 1", "Passo 2"],
+      "componentes": [...],
+      "servicos": [...],
+      "formularios": [
         {
-          "nome": "NomeComponent",
-          "seletor": "app-nome",
-          "modulo": "NomeModule",
-          "descricao": "Função do componente",
-          "inputs": [
-            { "nome": "prop", "tipo": "string", "descricao": "..." }
-          ],
-          "outputs": [
-            { "nome": "evento", "tipo": "EventEmitter<T>", "descricao": "..." }
-          ],
-          "servicos": ["NomeService"],
-          "metodos": [
-            { "nome": "onSubmit()", "descricao": "..." }
-          ]
-        }
-      ],
-      "servicos": [
-        {
-          "nome": "NomeService",
-          "escopo": "root",
-          "descricao": "Responsabilidade do serviço",
-          "endpoints": [
+          "nome": "form",
+          "campos": [
             {
-              "metodo": "POST",
-              "url": "/api/recurso",
-              "retorno": "Observable<Tipo>",
-              "descricao": "O que este endpoint faz",
-              "fonte": "arquivo",
-              "request": {
-                "contentType": "application/json",
-                "campos": [
-                  { "campo": "nome", "tipo": "string", "obrigatorio": true, "descricao": "..." }
-                ]
-              },
-              "responses": [
-                { "status": 200, "descricao": "Sucesso", "campos": [
-                  { "campo": "id", "tipo": "number", "descricao": "..." }
-                ]},
-                { "status": 400, "descricao": "Dados inválidos", "campos": [] },
-                { "status": 401, "descricao": "Não autorizado", "campos": [] }
-              ]
+              "campo": "cnpj",
+              "tipo": "string",
+              "obrigatorio": true,
+              "validacoes": ["mínimo 14 caracteres"],
+              "descricao": "CNPJ da empresa",
+              "fonte": "CotacaoInicioComponent.ts"
             }
           ]
         }
       ],
+      "permissoes": {
+        "guards": ["AuthGuard"],
+        "roles": [],
+        "claims": [],
+        "descricao": "Requer autenticação"
+      },
       "regrasNegocio": [
-        "Regra extraída da spec — texto completo e claro",
-        "Outra regra"
+        {
+          "texto": "CNPJ deve ser válido e ativo na Receita Federal",
+          "fonte": "cotacao-inicio.xlsx — aba Regras, linha 3"
+        }
       ],
-      "guards": [
-        { "nome": "AuthGuard", "tipo": "CanActivate", "descricao": "Verifica autenticação antes de ativar a rota" }
-      ],
-      "resolvers": [
-        { "nome": "DadosResolver", "dado": "Dados pré-carregados", "endpoint": "GET /api/dados" }
-      ],
-      "tags": ["api", "guards", "regras"],
-      "observacoes": [
-        "Observações técnicas relevantes para o desenvolvedor"
-      ],
-      "pendentes": [
-        "Item descrito na spec mas não encontrado no código"
-      ],
-      "descobertos": [
-        "Item encontrado no código mas não descrito na spec"
-      ]
+      "guards": [...],
+      "resolvers": [...],
+      "tags": [],
+      "observacoes": [],
+      "pendentes": [],
+      "descobertos": []
     }
   ],
   "fluxoNavegacao": [
     {
       "de": "/origem",
       "para": "/destino",
-      "condicao": "Condição que dispara a navegação",
-      "tipo": "action"
+      "condicao": "Condição",
+      "tipo": "action",
+      "fonte": "CotacaoInicioComponent.ts — método onSubmit()"
     }
   ],
   "endpointsGlobal": [],
@@ -266,58 +372,87 @@ Para cada página identificada, monte o objeto e salve tudo em `doc-output/_doc-
 }
 ```
 
-**Inclua em `paginas[]` apenas as páginas com status diferente de "completo".**
-Os campos globais (`interceptors`, `pipes`, `enums`, etc.) são sempre incluídos quando encontrados.
+**Regras de negócio agora têm `texto` e `fonte` separados.**
+**Fluxo de navegação agora tem `fonte` indicando onde foi encontrado.**
 
 ---
 
-### ETAPA 5 — Gerar os documentos
+## ETAPA 5 — Gerar os documentos
 
 ```
 node generate-doc.js
 ```
 
-Gera automaticamente:
-
-| Arquivo | Conteúdo |
-|---------|----------|
-| `[rota].docx` | Um por página — spec + código combinados |
-| `_indice.docx` | Índice mestre de todas as páginas |
-| `_regras-negocio.docx` | Todas as regras concentradas |
-| `_ui-componentes.docx` | Componentes, pipes e diretivas |
-| `_endpoints.docx` | Contratos de API |
-| `_arquitetura.docx` | Interceptors, enums, state, storage |
-| `_controle.json` | Controle de status atualizado |
-| `painel.html` | Painel visual com 3 abas |
+Ou no modo rápido:
+```
+node generate-doc.js --fast
+```
 
 ---
 
-### ETAPA 6 — Fluxo de navegação
+## ETAPA 6 — Atualizar controle com hashes
 
-Execute sempre, independente do status das páginas.
+Ao final, salve em `_controle.json`:
 
-Leia `app-routing.module.ts`, `*-routing.module.ts`, `*.guard.ts` e procure `router.navigate()` e `[routerLink]` nos componentes.
-
-Para cada transição mapeie: origem, destino, condição e tipo (`action`, `guard`, `redirect`, `link`).
+```json
+{
+  "ultimaExecucao": "dd/mm/yyyy",
+  "projeto": "...",
+  "modoRapido": false,
+  "hashesSpecs": {
+    "cotacao-inicio.xlsx": "md5hash",
+    "especificacao.docx": "md5hash"
+  },
+  "hashesEndpoints": {
+    "openapi.json": "md5hash"
+  },
+  "paginasDocumentadas": {
+    "/cotacao/inicio": {
+      "arquivo": "cotacao-inicio.docx",
+      "status": "completo",
+      "ultimaAtualizacao": "dd/mm/yyyy",
+      "hashSpecs": "md5-combinado-das-specs",
+      "hashCode": "md5-combinado-do-codigo",
+      "specsUsadas": ["cotacao-inicio.xlsx"],
+      "arquivosCodigo": ["src/app/cotacao/...component.ts"]
+    }
+  },
+  "fluxoNavegacao": [...],
+  "endpointsResumo": [...]
+}
+```
 
 ---
 
-### ETAPA 7 — Confirmar resultado
+## ETAPA 7 — Confirmar resultado
 
 Informe:
-- ✅ Páginas criadas
-- 🔄 Páginas atualizadas
-- ⏭️ Páginas puladas (completas)
-- ⚠️ Pendências (spec sem código ou vice-versa)
+```
+📊 Resultado:
+  ✅ X páginas criadas
+  🔄 Y páginas atualizadas (hashes mudaram)
+  ⏭️  Z páginas puladas (sem mudanças)
+  ⚠️  W pendências
+
+📁 Arquivos gerados em doc-output/
+🗺️  Abra painel.html no navegador para visualizar
+```
 
 ---
 
-## Regras de inferência
+## Regras gerais
 
-Se não houver spec nem comentário no código, infira pelo nome:
-- `CotacaoInicioComponent` → "Componente da página de início de cotação"
-- `this.http.post('/api/cotacao')` → `POST /api/cotacao descoberto no código`
+**Precisão acima de tudo:**
+- Documente apenas o que está na spec ou no código
+- Nunca invente regras de negócio
+- Se inferir algo, marque como `[Inferido — verificar]`
+- Se não encontrar, marque como `[Não identificado — preencher manualmente]`
 
-Se não conseguir inferir: `"Não identificado — preencher manualmente."`
+**Rastreabilidade:**
+- Toda informação deve ter fonte (`spec: arquivo.xlsx, aba X` ou `código: arquivo.ts, método Y`)
+- Isso permite QA e negócio validarem cada item documentado
 
-**Nunca invente regras de negócio. Se não estiver na spec nem no código, não documente.**
+**Escalabilidade:**
+- Leia apenas os arquivos necessários para cada página
+- Use hashes para pular o que não mudou
+- Prefira `/gerar-doc src/app/modulo` para projetos grandes
