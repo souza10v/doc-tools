@@ -357,7 +357,7 @@ Salve em `doc-output\_doc-data.json`:
   ],
   "ambientes": [
     {
-      "ambiente": "develoMeuProjetont",
+      "ambiente": "development",
       "arquivo": "environment.ts",
       "variaveis": [
         { "chave": "apiUrl",        "valor": "http://localhost:3000", "descricao": "URL base da API" },

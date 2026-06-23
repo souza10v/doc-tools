@@ -1,0 +1,14 @@
+# Dependências
+node_modules/
+
+# Arquivos gerados automaticamente
+specs-txt/
+endpoints-txt/
+doc-output/
+
+# Configuração local (cada dev tem o seu)
+config.json
+
+# Logs
+npm-debug.log*
+*.log

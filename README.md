@@ -23,31 +23,30 @@ O `doc-tools` deve ficar **sempre fora** da pasta do repositório git,
 mas perto o suficiente para ser fácil de encontrar. A posição recomendada
 é **ao lado** do repositório, dentro da pasta do cliente/projeto.
 
-### Exemplo real (MeuCliente)
+### Exemplo real
 
 ```
 D:\Projetos\
-└── MeuCliente\
-    └── MeuProjeto\
-        └── MeuCliente\
-            │
-            ├── meu-projeto-angular\          ← repositório git (sobe pro git)
-            │   ├── .git\
-            │   ├── src\
-            │   │   └── app\
-            │   ├── angular.json
-            │   └── package.json
-            │
-            └── doc-tools\                ← sistema de documentação (NÃO sobe pro git)
-                ├── config.json
-                ├── CLAUDE.md
-                ├── generate-doc.js
-                ├── generate-painel.js
-                ├── convert-specs.js
-                ├── .claude\skills\gerar-doc\SKILL.md
-                ├── specs\
-                ├── endpoints\
-                └── doc-output\
+└── ClienteABC\
+    └── ProjetoXYZ\
+        │
+        ├── projeto-xyz-angular\          ← repositório git (sobe pro git)
+        │   ├── .git\
+        │   ├── src\
+        │   │   └── app\
+        │   ├── angular.json
+        │   └── package.json
+        │
+        └── doc-tools\                    ← sistema de documentação (NÃO sobe pro git)
+            ├── config.json
+            ├── CLAUDE.md
+            ├── generate-doc.js
+            ├── generate-painel.js
+            ├── convert-specs.js
+            ├── .claude\skills\gerar-doc\SKILL.md
+            ├── specs\
+            ├── endpoints\
+            └── doc-output\
 ```
 
 ### Exemplo genérico para qualquer projeto
@@ -85,8 +84,8 @@ O `doc-tools` sabe onde está o código Angular pelo arquivo `config.json`:
 
 ```json
 {
-  "projeto": "meu-projeto-angular",
-  "caminhoSrc": "D:\\Projetos\\MeuCliente\\MeuProjeto\\meu-projeto-angular\\src",
+  "projeto": "projeto-xyz-angular",
+  "caminhoSrc": "D:\\Projetos\\ClienteABC\\ProjetoXYZ\\projeto-xyz-angular\\src",
   "stack": "angular"
 }
 ```
@@ -108,48 +107,87 @@ o código do projeto pelo caminho absoluto — sem precisar abrir o projeto.
 
 ### 1. Criar a estrutura de pastas
 
-```powershell
-# Escolha onde criar o doc-tools — FORA do repositório git
-# Exemplo: ao lado do projeto
-mkdir "D:\Projetos\MeuProjeto\doc-tools"
+Cole este bloco completo no PowerShell — ele cria tudo de uma vez:
 
-# Criar subpastas
-cd "D:\Projetos\MeuProjeto\doc-tools"
-mkdir specs
-mkdir endpoints
-mkdir doc-output
-mkdir .claude\skills\gerar-doc
+```powershell
+# Defina o caminho onde o doc-tools vai ficar (FORA do repositório git)
+$root = "D:\Projetos\MeuProjeto\doc-tools"
+
+# Criar toda a estrutura
+New-Item -ItemType Directory -Force -Path $root
+New-Item -ItemType Directory -Force -Path "$root\specs"
+New-Item -ItemType Directory -Force -Path "$root\endpoints"
+New-Item -ItemType Directory -Force -Path "$root\doc-output"
+New-Item -ItemType Directory -Force -Path "$root\.claude\skills\gerar-doc"
+
+# Confirmar
+Write-Host ""
+Write-Host "✅ Estrutura criada em $root" -ForegroundColor Green
+Write-Host ""
+Get-ChildItem $root -Force | Select-Object Name, Attributes
+```
+
+Resultado esperado:
+
+```
+doc-tools├── .claude│   └── skills│       └── gerar-doc\     ← pasta criada, aguardando SKILL.md
+├── specs\                 ← vazia, pronta para receber arquivos
+├── endpoints\             ← vazia, pronta para receber arquivos
+└── doc-output\            ← vazia, será preenchida ao rodar /gerar-doc
 ```
 
 ### 2. Copiar os arquivos do sistema
 
-Copie os arquivos baixados para as seguintes pastas:
-
-| Arquivo             | Destino                                    |
-|---------------------|--------------------------------------------|
-| `CLAUDE.md`         | `doc-tools\`                               |
-| `generate-doc.js`   | `doc-tools\`                               |
-| `generate-painel.js`| `doc-tools\`                               |
-| `convert-specs.js`  | `doc-tools\`                               |
-| `config.json`       | `doc-tools\`                               |
-| `SKILL.md`          | `doc-tools\.claude\skills\gerar-doc\`      |
+Extraia o ZIP baixado e copie os arquivos para as pastas certas:
 
 ```powershell
-# Exemplo copiando da pasta Downloads
+# Ajuste $src para onde o ZIP foi extraído
+$src = "$env:USERPROFILE\Downloads\doc-tools-release"
 $dst = "D:\Projetos\MeuProjeto\doc-tools"
-$src = "$env:USERPROFILE\Downloads"
 
-Copy-Item "$src\CLAUDE.md"            "$dst\CLAUDE.md"           -Force
-Copy-Item "$src\generate-doc.js"      "$dst\generate-doc.js"     -Force
-Copy-Item "$src\generate-painel.js"   "$dst\generate-painel.js"  -Force
-Copy-Item "$src\convert-specs.js"     "$dst\convert-specs.js"    -Force
-Copy-Item "$src\config.json"          "$dst\config.json"         -Force
-Copy-Item "$src\SKILL.md"             "$dst\.claude\skills\gerar-doc\SKILL.md" -Force
+# Arquivos da raiz
+Copy-Item "$src\CLAUDE.md"            "$dst\CLAUDE.md"                                  -Force
+Copy-Item "$src\generate-doc.js"      "$dst\generate-doc.js"                            -Force
+Copy-Item "$src\generate-painel.js"   "$dst\generate-painel.js"                         -Force
+Copy-Item "$src\convert-specs.js"     "$dst\convert-specs.js"                           -Force
+Copy-Item "$src\config.json"          "$dst\config.json"                                -Force
+Copy-Item "$src\config.exemplo.json"  "$dst\config.exemplo.json"                        -Force
+Copy-Item "$src\package.json"         "$dst\package.json"                               -Force
+
+# Skill do Claude Code
+Copy-Item "$src\.claude\skills\gerar-doc\SKILL.md" "$dst\.claude\skills\gerar-doc\SKILL.md" -Force
+
+# Confirmar
+Write-Host ""
+Write-Host "✅ Arquivos copiados com sucesso" -ForegroundColor Green
+Get-ChildItem $dst | Select-Object Name
+```
+
+Estrutura final depois da cópia:
+
+```
+doc-tools├── .claude│   └── skills│       └── gerar-doc│           └── SKILL.md        ← ✅ copiado
+├── specs\                      ← vazia (coloque seus arquivos aqui)
+├── endpoints\                  ← vazia (coloque seus arquivos aqui)
+├── doc-output\                 ← vazia (gerada ao rodar /gerar-doc)
+├── CLAUDE.md                   ← ✅ copiado
+├── SKILL.md                    ← ✅ copiado
+├── config.json                 ← ✅ copiado (edite a seguir)
+├── config.exemplo.json         ← ✅ copiado
+├── package.json                ← ✅ copiado
+├── convert-specs.js            ← ✅ copiado
+├── generate-doc.js             ← ✅ copiado
+└── generate-painel.js          ← ✅ copiado
 ```
 
 ### 3. Configurar o projeto
 
-Abra o arquivo `config.json` e edite com os dados do seu projeto:
+Abra o `config.json` e edite com os dados do seu projeto:
+
+```powershell
+# Abrir para editar no VS Code
+code "D:\Projetos\MeuProjeto\doc-tools\config.json"
+```
 
 ```json
 {
@@ -160,13 +198,16 @@ Abra o arquivo `config.json` e edite com os dados do seu projeto:
 ```
 
 > ⚠️ Use barras duplas `\\` no caminho no Windows.
+> Dica: copie o caminho do Explorer e substitua cada `\` por `\\`.
 
 ### 4. Instalar dependências
 
 ```powershell
 cd "D:\Projetos\MeuProjeto\doc-tools"
-npm install docx mammoth
+npm install
 ```
+
+Instala tudo de uma vez: `docx`, `mammoth`, `xlsx`, `adm-zip`, `pdf-parse`.
 
 ### 5. Fazer login no Claude Code
 
@@ -187,20 +228,28 @@ doc-tools\
 ├── CLAUDE.md                ← instruções para o Claude Code (não editar)
 ├── generate-doc.js          ← script gerador de Word (não editar)
 ├── generate-painel.js       ← script gerador do painel HTML (não editar)
-├── convert-specs.js         ← conversor de Word para texto (não editar)
+├── convert-specs.js         ← conversor de arquivos para texto (não editar)
 │
 ├── .claude\
 │   └── skills\
 │       └── gerar-doc\
 │           └── SKILL.md     ← skill do Claude Code (não editar)
 │
-├── specs\                   ← COLOQUE AQUI: specs de telas (.docx)
-│   └── cotacao-inicio.docx
-│   └── pagamento.docx
+├── specs\                   ← COLOQUE AQUI: specs de telas
+│   │                           Aceita: .docx .xlsx .pptx .pdf .json .txt .md
+│   │                           Sem limite de arquivos — misture à vontade
+│   ├── minha-tela.docx
+│   ├── regras.xlsx
+│   ├── fluxos.pptx
+│   └── spec-formal.pdf
 │
-├── endpoints\               ← COLOQUE AQUI: contratos de API (.json ou .docx)
-│   └── openapi.json
-│   └── endpoints-auth.docx
+├── endpoints\               ← COLOQUE AQUI: contratos de API
+│   │                           Aceita: .json .docx .xlsx .pdf .txt .md
+│   │                           Sem limite de arquivos — misture à vontade
+│   ├── openapi.json
+│   ├── endpoints.docx
+│   ├── tabela-api.xlsx
+│   └── contrato.pdf
 │
 ├── specs-txt\               ← gerado automaticamente (não editar)
 ├── endpoints-txt\           ← gerado automaticamente (não editar)
@@ -223,23 +272,42 @@ doc-tools\
 
 ## 📂 O que colocar em cada pasta de entrada
 
+> ✅ **Ambas as pastas são opcionais.** Se estiverem vazias, o Claude documenta apenas pelo código Angular.
+> Você pode misturar quantos arquivos quiser, em qualquer combinação de formatos.
+
+---
+
+### Formatos aceitos (nas duas pastas)
+
+| Formato | Ícone | Quando usar |
+|---------|-------|-------------|
+| `.docx` | 📄 | Documentos Word com requisitos em texto |
+| `.xlsx` | 📊 | Planilhas com tabelas de regras, campos, permissões, matrizes |
+| `.pptx` | 📽️ | Apresentações com fluxos de tela, wireframes, slides de arquitetura |
+| `.pdf`  | 📋 | Documentos formais de especificação, contratos, manuais |
+| `.json` | 🔧 | OpenAPI/Swagger, contratos de API estruturados |
+| `.txt`  | 📝 | Texto simples, notas, rascunhos |
+| `.md`   | 📝 | Markdown com requisitos ou documentação |
+
+---
+
 ### `specs\` — Especificações de telas
 
-Coloque arquivos descrevendo as telas do frontend. Formatos aceitos:
-
-| Formato | Quando usar |
-|---------|-------------|
-| `.docx` | Documentos Word com requisitos em texto |
-| `.xlsx` | Planilhas com tabelas de regras, campos, permissões |
-| `.pptx` | Apresentações com fluxos de tela e wireframes |
-| `.pdf`  | Documentos formais de especificação ou contratos |
+Coloque qualquer arquivo que descreva telas, funcionalidades ou regras de negócio.
+Sem limite de quantidade — coloque todos que tiver.
 
 ```
 specs\
-├── cotacao-inicio.docx       ← requisitos em Word
-├── regras-negocio.xlsx       ← tabela de regras por módulo
-├── fluxo-navegacao.pptx      ← slides com wireframes e fluxos
-└── especificacao-formal.pdf  ← documento oficial de requisitos
+├── cotacao-inicio.docx       📄 requisitos da tela em Word
+├── selecao-planos.docx       📄 requisitos de outra tela
+├── regras-negocio.xlsx       📊 tabela com todas as regras por módulo
+├── matriz-permissoes.xlsx    📊 quem pode acessar cada tela
+├── fluxo-navegacao.pptx      📽️ slides com wireframes e fluxos
+├── arquitetura-frontend.pptx 📽️ slides com componentes e módulos
+├── especificacao-formal.pdf  📋 documento oficial de requisitos
+├── manual-usuario.pdf        📋 manual com fluxos descritos
+├── notas-reuniao.txt         📝 anotações de reunião com o cliente
+└── glossario.md              📝 glossário de termos do negócio
 ```
 
 **O que incluir no documento:**
@@ -276,14 +344,19 @@ Regras de negócio:
 
 ### `endpoints\` — Contratos de API
 
-Coloque arquivos `.json` (OpenAPI/Swagger) ou `.docx` descrevendo os endpoints:
+Coloque qualquer arquivo que descreva endpoints, contratos ou integrações.
+Sem limite de quantidade — coloque todos que tiver.
 
 ```
 endpoints\
-├── openapi.json             ← especificação OpenAPI/Swagger completa
-├── endpoints-cotacao.docx   ← endpoints em Word
-├── endpoints-auth.xlsx      ← tabela de endpoints em Excel
-└── contrato-integracao.pdf  ← contrato formal de integração
+├── openapi.json              🔧 especificação OpenAPI/Swagger completa
+├── swagger-auth.json         🔧 spec do módulo de autenticação
+├── endpoints-cotacao.docx    📄 endpoints do módulo de cotação em Word
+├── endpoints-proposta.docx   📄 endpoints do módulo de proposta em Word
+├── tabela-endpoints.xlsx     📊 tabela completa de endpoints em Excel
+├── matriz-http-status.xlsx   📊 planilha com status codes por endpoint
+├── contrato-integracao.pdf   📋 contrato formal de integração
+└── manual-api.pdf            📋 manual da API com exemplos
 ```
 
 **Formato JSON aceito (OpenAPI/Swagger):**
