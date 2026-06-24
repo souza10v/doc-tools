@@ -234,7 +234,13 @@ function renderEndpoint(ep, idx) {
 // ── Documento por página ──────────────────────────────────────────────────────
 async function gerarPagina(pg) {
   const titulo   = pg.titulo ?? pg.rota ?? "Página";
-  const filename = pg.arquivo ?? `${(pg.rota ?? "pagina").replace(/\//g, "-").replace(/^-/, "")}.docx`;
+  // Gerar sempre um filename único baseado na rota — ignorar pg.arquivo que pode ser igual para todas as páginas
+  const filenameBase = (pg.rota ?? "pagina")
+    .replace(/\//g, "-")
+    .replace(/^-/, "")
+    .replace(/[^a-zA-Z0-9-_]/g, "")
+    || pg.titulo?.toLowerCase().replace(/[^a-z0-9]/g, "-") || "pagina";
+  const filename = `${filenameBase}.docx`;
   const isAtualizado = pg.atualizado ?? false;
 
   // ── Seção 1: Identificação ──────────────────────────────────────────────────
@@ -342,17 +348,28 @@ async function gerarPagina(pg) {
   // ── Seção 4: Serviços e Endpoints ──────────────────────────────────────────
   const secServicos = [h1("4. Serviços e Integrações com API")];
   if (pg.servicos?.length) {
-    pg.servicos.forEach(s => {
-      secServicos.push(h2(s.nome));
-      if (s.escopo) secServicos.push(body(`Escopo: ${s.escopo}`, { color: "666666", size: 20 }));
-      if (s.descricao) secServicos.push(body(s.descricao));
+    const todosEps = normalizarEndpoints(pg.servicos);
+    if (todosEps.length) {
+      // Tabela resumo
+      const wRes = [900, 2800, 1800, CW - 5500];
+      secServicos.push(body("Endpoints consumidos nesta página:", { bold: true }));
+      secServicos.push(mkTable(
+        ["Método", "Endpoint", "Serviço", "Descrição"], wRes,
+        todosEps.map(ep => [ep.metodo ?? "—", ep.url ?? "—", ep._servicoNome ?? "—", ep.descricao ?? "—"])
+      ));
       secServicos.push(spacer());
-      if (s.endpoints?.length) {
-        s.endpoints.forEach((ep, i) => secServicos.push(...renderEndpoint(ep, i)));
-      } else {
-        secServicos.push(body("Sem endpoints mapeados."));
-      }
-    });
+      // Detalhe de cada endpoint
+      todosEps.forEach((ep, i) => secServicos.push(...renderEndpoint(ep, i)));
+    } else {
+      // Formato só descritivo
+      pg.servicos.forEach(s => {
+        secServicos.push(h2(s.nome));
+        if (s.escopo) secServicos.push(body(`Escopo: ${s.escopo}`, { color: "666666", size: 20 }));
+        if (s.descricao) secServicos.push(body(s.descricao));
+        if (s.metodo && s.endpoint) secServicos.push(body(`${s.metodo} ${s.endpoint}`, { font: "Courier New", size: 20 }));
+        secServicos.push(spacer());
+      });
+    }
   } else {
     secServicos.push(body("Nenhum serviço mapeado."));
   }
@@ -411,6 +428,12 @@ async function gerarPagina(pg) {
   }
 
   // ── Seção 7: Guards, Permissões e Resolvers ─────────────────────────────────
+  // Normalizar guards: suporta string[] e objeto[]
+  const guardsNormalizados = (pg.guards ?? []).map(g =>
+    typeof g === "string" ? { nome: g, tipo: "CanActivate", descricao: "—" } : g
+  );
+  pg.guards = guardsNormalizados;
+
   const secGuards = [h1(`${pg.formularios?.length ? "7" : "6"}. Guards, Permissões e Resolvers`)];
 
   // Permissões
@@ -543,6 +566,27 @@ async function gerarPagina(pg) {
 }
 
 // ── _endpoints.docx ───────────────────────────────────────────────────────────
+// ── Normalizar estrutura de serviços (suporta formato novo e antigo) ──────────
+function normalizarEndpoints(servicos) {
+  if (!servicos?.length) return [];
+  const resultado = [];
+  servicos.forEach(s => {
+    if (s.endpoint && !s.endpoints) {
+      resultado.push({
+        metodo: s.metodo ?? "POST", url: s.endpoint,
+        retorno: s.retorno ?? "—", descricao: s.descricao ?? "—",
+        fonte: s.fonte ?? "codigo",
+        request: s.request ?? { contentType: null, campos: [] },
+        responses: s.responses ?? [],
+        _servicoNome: s.nome,
+      });
+    } else if (s.endpoints?.length) {
+      s.endpoints.forEach(ep => resultado.push({ ...ep, _servicoNome: s.nome }));
+    }
+  });
+  return resultado;
+}
+
 async function gerarEndpoints() {
   const eps = data.endpointsGlobal ?? [];
   if (!eps.length) return;
@@ -607,7 +651,16 @@ async function gerarRegras(paginas) {
     if (!pg.regrasNegocio?.length) return;
     children.push(h1(pg.titulo ?? pg.rota));
     children.push(body(`Rota: ${pg.rota ?? "—"}`, { color: "666666", size: 20 }));
-    pg.regrasNegocio.forEach(r => children.push(bullet(`RN-${String(rn++).padStart(3,"0")}: ${r}`)));
+    pg.regrasNegocio.forEach(r => {
+      const texto = typeof r === "string" ? r : (r.texto ?? String(r));
+      const fonte = typeof r === "object" && r.fonte ? r.fonte : null;
+      children.push(new Paragraph({
+        numbering: { reference: "bullets", level: 0 },
+        spacing: { after: 60 },
+        children: [new TextRun({ text: `RN-${String(rn++).padStart(3,"0")}: ${texto}`, size: 22, font: "Arial" })],
+      }));
+      if (fonte) children.push(body(`   ↳ ${fonte}`, { color: "888888", size: 18, italics: true }));
+    });
     children.push(spacer(), divider());
   });
   if (rn === 1) children.push(body("Nenhuma regra identificada ainda."));
@@ -617,12 +670,17 @@ async function gerarRegras(paginas) {
 // ── _ui-componentes.docx ─────────────────────────────────────────────────────
 async function gerarUI(paginas) {
   const todos = [];
-  paginas.forEach(pg => (pg.componentes ?? []).forEach(c => { if (!todos.find(x => x.nome===c.nome)) todos.push({...c, pagina: pg.titulo ?? pg.rota}); }));
-  const w = [2200,1800,1800,1800,CW-7600];
+  paginas.forEach(pg => (pg.componentes ?? []).forEach(c => {
+    if (!todos.find(x => x.nome===c.nome)) todos.push({...c, pagina: pg.titulo ?? pg.rota});
+  }));
+  const w = [2400,1600,1600,1800,CW-7400];
   const children = [
     ...capa("UI — Componentes", data.projeto ?? "Projeto", data.data),
     h1("Todos os Componentes"),
-    todos.length ? mkTable(["Componente","Seletor","Módulo","Página","Descrição"], w, todos.map(c=>[c.nome,c.seletor??"—",c.modulo??"—",c.pagina??"—",c.descricao??"—"])) : body("Nenhum componente mapeado."),
+    todos.length ? mkTable(
+      ["Componente","Seletor","Módulo","Página","Descrição"], w,
+      todos.map(c=>[c.nome, c.seletor??"—", c.modulo??"—", c.pagina??"—", c.descricao??"—"])
+    ) : body("Nenhum componente mapeado."),
     spacer(), divider(),
   ];
   await salvar("_ui-componentes.docx", "UI — Componentes", children);
